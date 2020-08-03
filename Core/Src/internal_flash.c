@@ -5,7 +5,7 @@
  *      Author: calebkang
  */
 #include "internal_flash.h"
-
+#include <stdio.h>
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -31,12 +31,12 @@ FLASHIF_StatusTypeDef FLASH_If_Erase(uint32_t bank_active)
   if (bank_active == 0U)
   {
     bank_to_erase = FLASH_BANK_2;
-    Serial_PutString((uint8_t *)"Erasing bank 2.\r\n");
+    printf("Erasing bank 2.\r\n");
   }
   else
   {
     bank_to_erase = FLASH_BANK_1;
-    Serial_PutString((uint8_t *)"Erasing bank 1.\r\n");
+    printf("Erasing bank 1.\r\n");
   }
 
   /* Unlock the Flash to enable the flash control register access *************/

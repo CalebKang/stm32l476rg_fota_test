@@ -17,14 +17,16 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "app.h"
 /* USER CODE END Includes */
 
@@ -50,6 +52,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -57,16 +60,12 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 extern UART_HandleTypeDef huart2;
-void Serial_PutString(uint8_t *p_string)
+int _write(int file, char *data, int len)
 {
-  uint16_t length = 0U;
-
-  while (p_string[length] != '\0')
-  {
-    length++;
-  }
-  HAL_UART_Transmit(&huart2, p_string, length, 100);
+  HAL_StatusTypeDef status = HAL_UART_Transmit(&huart2, (uint8_t*)data, len, 1000);
+  return (status == HAL_OK ? len : 0);
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -98,10 +97,19 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
+  printf("App start\r\n");
   app_main();
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in freertos.c) */
+  MX_FREERTOS_Init();
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   HAL_Delay(1000);
@@ -112,12 +120,12 @@ int main(void)
   if(BankActive == 0)
   {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    Serial_PutString((uint8_t *)"[1]Start BANK 1 \r\n\n");
+    printf("[1]Start BANK 1 \r\n\n");
   }
   else
   {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    Serial_PutString((uint8_t *)"[2]Start BANK 2 \r\n\n");
+    printf("[2]Start BANK 2 \r\n\n");
   }
 
 
@@ -130,12 +138,12 @@ int main(void)
 
       if (BankActive == 0U )
       {
-        Serial_PutString((uint8_t *)"[1]Erase BANK 2 \r\n\n");
+        printf("[1]Erase BANK 2 \r\n\n");
         FLASH_If_Erase(BankActive);
-        Serial_PutString((uint8_t *)"[1]Write BANK 2 \r\n\n");
+        printf("[1]Write BANK 2 \r\n\n");
         FLASH_If_Write( FLASH_START_BANK2, (uint32_t *)fw, FW_LEN);
 
-        Serial_PutString((uint8_t *)"[1]Restart BANK 2 \r\n\n");
+        printf("[1]Restart BANK 2 \r\n\n");
         FLASH_If_BankSwitch();
       }
       else
@@ -145,7 +153,7 @@ int main(void)
         //Serial_PutString((uint8_t *)"[2]Write BANK 1 \r\n\n");
         //FLASH_If_Write( FLASH_START_BANK2, (uint32_t *)fw, FW_LEN);
 
-        Serial_PutString((uint8_t *)"[2]Restart BANK 1 \r\n\n");
+        printf("[2]Restart BANK 1 \r\n\n");
         FLASH_If_BankSwitch();
       }
     }
@@ -166,7 +174,8 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -182,7 +191,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
@@ -201,7 +210,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Configure the main internal regulator output voltage 
+  /** Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
@@ -212,6 +221,27 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM5 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM5) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -234,7 +264,7 @@ void Error_Handler(void)
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
-{ 
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
